@@ -1,26 +1,35 @@
-import { NextRequest } from 'next/server';
-
-export async function POST(req: NextRequest){
+export async function POST(req: Request) {
   try {
     const { paymentKey, orderId, amount } = await req.json();
-    if (!paymentKey || !orderId || !amount) return Response.json({ ok:false, message:'params missing' }, { status: 400 });
 
-    const secretKey = process.env.TOSS_SECRET_KEY!;
-    const auth = Buffer.from(`${secretKey}:`).toString('base64');
+    if (!paymentKey || !orderId || !amount) {
+      return new Response(JSON.stringify({ ok: false, message: 'paymentKey/orderId/amount required' }), { status: 400 });
+    }
 
-    const res = await fetch('https://api.tosspayments.com/v1/payments/confirm', {
+    const secret = process.env.TOSS_SECRET_KEY!;
+    if (!secret) {
+      return new Response(JSON.stringify({ ok: false, message: 'Missing env: TOSS_SECRET_KEY' }), { status: 500 });
+    }
+
+    // Basic auth header: base64("<secret>:")
+    const auth = Buffer.from(`${secret}:`).toString('base64');
+
+    const tossRes = await fetch('https://api.tosspayments.com/v1/payments/confirm', {
       method: 'POST',
       headers: {
         'Authorization': `Basic ${auth}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ paymentKey, orderId, amount })
+      body: JSON.stringify({ paymentKey, orderId, amount: Number(amount) })
     });
-    const data = await res.json();
-    if (!res.ok) return Response.json({ ok:false, message: data.message || 'toss error', data }, { status: res.status });
 
-    return Response.json({ ok:true, data });
-  } catch (e:any) {
-    return Response.json({ ok:false, message: e.message }, { status: 500 });
+    const data = await tossRes.json();
+    if (!tossRes.ok) {
+      return new Response(JSON.stringify({ ok: false, message: data?.message || 'Toss confirm failed', data }), { status: tossRes.status });
+    }
+
+    return new Response(JSON.stringify({ ok: true, data }), { status: 200 });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ ok: false, message: String(err) }), { status: 500 });
   }
 }

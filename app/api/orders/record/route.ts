@@ -1,22 +1,34 @@
-import { NextRequest } from 'next/server';
-
-export async function POST(req: NextRequest){
+export async function POST(req: Request) {
   try {
-    const { orderId, amount, lineItems } = await req.json();
-    const url = process.env.SHEETS_WEBAPP_URL!;
+    const body = await req.json();
+
+    const sheetsUrl = process.env.SHEETS_WEBAPP_URL!;
     const token = process.env.SHEETS_WEBAPP_TOKEN!;
 
-    const res = await fetch(url, {
+    if (!sheetsUrl || !token) {
+      return new Response(JSON.stringify({ ok: false, message: 'Missing env: SHEETS_WEBAPP_URL / SHEETS_WEBAPP_TOKEN' }), { status: 500 });
+    }
+
+    const { orderId, amount, lineItems } = body || {};
+    if (!orderId) {
+      return new Response(JSON.stringify({ ok: false, message: 'orderId required' }), { status: 400 });
+    }
+
+    const webappRes = await fetch(sheetsUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, action: 'recordSale', payload: { orderId, amount, lineItems } })
+      body: JSON.stringify({
+        token,
+        action: 'recordSale',
+        payload: { orderId, amount, lineItems: lineItems || [] }
+      })
     });
-    const data = await res.json();
 
-    // Apps Script는 상태코드 고정 → body.code 참고
-    if (data && (data.ok || data.code === 200)) return Response.json({ ok:true, data });
-    return Response.json({ ok:false, message: data?.message || 'webapp error', data }, { status: 500 });
-  } catch (e:any) {
-    return Response.json({ ok:false, message: e.message }, { status: 500 });
+    const data = await webappRes.json();
+    const status = (data && typeof data.code === 'number') ? data.code : webappRes.status;
+
+    return new Response(JSON.stringify(data), { status });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ ok: false, message: String(err) }), { status: 500 });
   }
 }
