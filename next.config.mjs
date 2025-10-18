@@ -1,11 +1,17 @@
+import path from 'path';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-  images: {
-    remotePatterns: [
-      { protocol: 'https', hostname: '**.aladin.co.kr' },
-      { protocol: 'https', hostname: '**.aladinimg.co.kr' }
-    ]
-  }
+  // Avoid invalid experimental flags
+  experimental: {},
+  webpack: (config) => {
+    config.resolve = config.resolve || {};
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      '@': path.resolve(process.cwd()),
+    };
+    return config;
+  },
 };
+
 export default nextConfig;
